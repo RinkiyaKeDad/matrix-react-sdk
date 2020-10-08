@@ -15,16 +15,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-import Analytics from '../Analytics';
-import { asyncAction } from './actionCreators';
-import TagOrderStore from '../stores/TagOrderStore';
+import Analytics from "../Analytics";
+import { asyncAction } from "./actionCreators";
+import GroupFilterOrderStore from "../stores/GroupFilterOrderStore";
 import { AsyncActionPayload } from "../dispatcher/payloads";
 import { MatrixClient } from "matrix-js-sdk/src/client";
 
 export default class TagOrderActions {
     /**
      * Creates an action thunk that will do an asynchronous request to
-     * move a tag in TagOrderStore to destinationIx.
+     * move a tag in GroupFilterOrderStore to destinationIx.
      *
      * @param {MatrixClient} matrixClient the matrix client to set the
      * account data on.
@@ -34,31 +34,44 @@ export default class TagOrderActions {
      * dispatch actions indicating the status of the request.
      * @see asyncAction
      */
-    public static moveTag(matrixClient: MatrixClient, tag: string, destinationIx: number): AsyncActionPayload {
+    public static moveTag(
+        matrixClient: MatrixClient,
+        tag: string,
+        destinationIx: number
+    ): AsyncActionPayload {
         // Only commit tags if the state is ready, i.e. not null
-        let tags = TagOrderStore.getOrderedTags();
-        let removedTags = TagOrderStore.getRemovedTagsAccountData() || [];
+        let tags = GroupFilterOrderStore.getOrderedTags();
+        let removedTags =
+            GroupFilterOrderStore.getRemovedTagsAccountData() || [];
         if (!tags) {
             return;
         }
 
         tags = tags.filter((t) => t !== tag);
-        tags = [...tags.slice(0, destinationIx), tag, ...tags.slice(destinationIx)];
+        tags = [
+            ...tags.slice(0, destinationIx),
+            tag,
+            ...tags.slice(destinationIx),
+        ];
 
         removedTags = removedTags.filter((t) => t !== tag);
 
-        const storeId = TagOrderStore.getStoreId();
+        const storeId = GroupFilterOrderStore.getStoreId();
 
-        return asyncAction('TagOrderActions.moveTag', () => {
-            Analytics.trackEvent('TagOrderActions', 'commitTagOrdering');
-            return matrixClient.setAccountData(
-                'im.vector.web.tag_ordering',
-                {tags, removedTags, _storeId: storeId},
-            );
-        }, () => {
-            // For an optimistic update
-            return {tags, removedTags};
-        });
+        return asyncAction(
+            "TagOrderActions.moveTag",
+            () => {
+                Analytics.trackEvent("TagOrderActions", "commitTagOrdering");
+                return matrixClient.setAccountData(
+                    "im.vector.web.tag_ordering",
+                    { tags, removedTags, _storeId: storeId }
+                );
+            },
+            () => {
+                // For an optimistic update
+                return { tags, removedTags };
+            }
+        );
     }
 
     /**
@@ -81,10 +94,14 @@ export default class TagOrderActions {
      * actions indicating the status of the request.
      * @see asyncAction
      */
-    public static removeTag(matrixClient: MatrixClient, tag: string): AsyncActionPayload {
+    public static removeTag(
+        matrixClient: MatrixClient,
+        tag: string
+    ): AsyncActionPayload {
         // Don't change tags, just removedTags
-        const tags = TagOrderStore.getOrderedTags();
-        const removedTags = TagOrderStore.getRemovedTagsAccountData() || [];
+        const tags = GroupFilterOrderStore.getOrderedTags();
+        const removedTags =
+            GroupFilterOrderStore.getRemovedTagsAccountData() || [];
 
         if (removedTags.includes(tag)) {
             // Return a thunk that doesn't do anything, we don't even need
@@ -94,17 +111,21 @@ export default class TagOrderActions {
 
         removedTags.push(tag);
 
-        const storeId = TagOrderStore.getStoreId();
+        const storeId = GroupFilterOrderStore.getStoreId();
 
-        return asyncAction('TagOrderActions.removeTag', () => {
-            Analytics.trackEvent('TagOrderActions', 'removeTag');
-            return matrixClient.setAccountData(
-                'im.vector.web.tag_ordering',
-                {tags, removedTags, _storeId: storeId},
-            );
-        }, () => {
-            // For an optimistic update
-            return {removedTags};
-        });
+        return asyncAction(
+            "TagOrderActions.removeTag",
+            () => {
+                Analytics.trackEvent("TagOrderActions", "removeTag");
+                return matrixClient.setAccountData(
+                    "im.vector.web.tag_ordering",
+                    { tags, removedTags, _storeId: storeId }
+                );
+            },
+            () => {
+                // For an optimistic update
+                return { removedTags };
+            }
+        );
     }
 }

@@ -15,23 +15,23 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-import React from 'react';
-import TagOrderStore from '../../stores/TagOrderStore';
+import React from "react";
+import GroupFilterOrderStore from "../../stores/GroupFilterOrderStore";
 
-import GroupActions from '../../actions/GroupActions';
+import GroupActions from "../../actions/GroupActions";
 
-import * as sdk from '../../index';
-import dis from '../../dispatcher/dispatcher';
-import { _t } from '../../languageHandler';
+import * as sdk from "../../index";
+import dis from "../../dispatcher/dispatcher";
+import { _t } from "../../languageHandler";
 
-import { Droppable } from 'react-beautiful-dnd';
-import classNames from 'classnames';
+import { Droppable } from "react-beautiful-dnd";
+import classNames from "classnames";
 import MatrixClientContext from "../../contexts/MatrixClientContext";
 import AutoHideScrollbar from "./AutoHideScrollbar";
 import SettingsStore from "../../settings/SettingsStore";
 import UserTagTile from "../views/elements/UserTagTile";
 
-class TagPanel extends React.Component {
+class GroupFilterPanel extends React.Component {
     static contextType = MatrixClientContext;
 
     state = {
@@ -44,13 +44,13 @@ class TagPanel extends React.Component {
         this.context.on("Group.myMembership", this._onGroupMyMembership);
         this.context.on("sync", this._onClientSync);
 
-        this._tagOrderStoreToken = TagOrderStore.addListener(() => {
+        this._tagOrderStoreToken = GroupFilterOrderStore.addListener(() => {
             if (this.unmounted) {
                 return;
             }
             this.setState({
-                orderedTags: TagOrderStore.getOrderedTags() || [],
-                selectedTags: TagOrderStore.getSelectedTags(),
+                orderedTags: GroupFilterOrderStore.getOrderedTags() || [],
+                selectedTags: GroupFilterOrderStore.getSelectedTags(),
             });
         });
         // This could be done by anything with a matrix client
@@ -59,7 +59,10 @@ class TagPanel extends React.Component {
 
     componentWillUnmount() {
         this.unmounted = true;
-        this.context.removeListener("Group.myMembership", this._onGroupMyMembership);
+        this.context.removeListener(
+            "Group.myMembership",
+            this._onGroupMyMembership
+        );
         this.context.removeListener("sync", this._onClientSync);
         if (this._tagOrderStoreToken) {
             this._tagOrderStoreToken.remove();
@@ -81,44 +84,47 @@ class TagPanel extends React.Component {
         }
     };
 
-    onMouseDown = e => {
+    onMouseDown = (e) => {
         // only dispatch if its not a no-op
         if (this.state.selectedTags.length > 0) {
-            dis.dispatch({action: 'deselect_tags'});
+            dis.dispatch({ action: "deselect_tags" });
         }
     };
 
-    onClearFilterClick = ev => {
-        dis.dispatch({action: 'deselect_tags'});
+    onClearFilterClick = (ev) => {
+        dis.dispatch({ action: "deselect_tags" });
     };
 
     renderGlobalIcon() {
-        if (!SettingsStore.getValue("feature_communities_v2_prototypes")) return null;
+        if (!SettingsStore.getValue("feature_communities_v2_prototypes"))
+            return null;
 
         return (
             <div>
                 <UserTagTile />
-                <hr className="mx_TagPanel_divider" />
+                <hr className="mx_GroupFilterPanel_divider" />
             </div>
         );
     }
 
     render() {
-        const DNDTagTile = sdk.getComponent('elements.DNDTagTile');
-        const ActionButton = sdk.getComponent('elements.ActionButton');
+        const DNDTagTile = sdk.getComponent("elements.DNDTagTile");
+        const ActionButton = sdk.getComponent("elements.ActionButton");
 
         const tags = this.state.orderedTags.map((tag, index) => {
-            return <DNDTagTile
-                key={tag}
-                tag={tag}
-                index={index}
-                selected={this.state.selectedTags.includes(tag)}
-            />;
+            return (
+                <DNDTagTile
+                    key={tag}
+                    tag={tag}
+                    index={index}
+                    selected={this.state.selectedTags.includes(tag)}
+                />
+            );
         });
 
         const itemsSelected = this.state.selectedTags.length > 0;
-        const classes = classNames('mx_TagPanel', {
-            mx_TagPanel_items_selected: itemsSelected,
+        const classes = classNames("mx_GroupFilterPanel", {
+            mx_GroupFilterPanel_items_selected: itemsSelected,
         });
 
         let createButton = (
@@ -126,7 +132,8 @@ class TagPanel extends React.Component {
                 tooltip
                 label={_t("Communities")}
                 action="toggle_my_groups"
-                className="mx_TagTile mx_TagTile_plus" />
+                className="mx_TagTile mx_TagTile_plus"
+            />
         );
 
         if (SettingsStore.getValue("feature_communities_v2_prototypes")) {
@@ -135,37 +142,38 @@ class TagPanel extends React.Component {
                     tooltip
                     label={_t("Create community")}
                     action="view_create_group"
-                    className="mx_TagTile mx_TagTile_plus" />
+                    className="mx_TagTile mx_TagTile_plus"
+                />
             );
         }
 
-        return <div className={classes} onClick={this.onClearFilterClick}>
-            <AutoHideScrollbar
-                className="mx_TagPanel_scroller"
-                // XXX: Use onMouseDown as a workaround for https://github.com/atlassian/react-beautiful-dnd/issues/273
-                // instead of onClick. Otherwise we experience https://github.com/vector-im/element-web/issues/6253
-                onMouseDown={this.onMouseDown}
-            >
-                <Droppable
-                    droppableId="tag-panel-droppable"
-                    type="draggable-TagTile"
+        return (
+            <div className={classes} onClick={this.onClearFilterClick}>
+                <AutoHideScrollbar
+                    className="mx_GroupFilterPanel_scroller"
+                    // XXX: Use onMouseDown as a workaround for https://github.com/atlassian/react-beautiful-dnd/issues/273
+                    // instead of onClick. Otherwise we experience https://github.com/vector-im/element-web/issues/6253
+                    onMouseDown={this.onMouseDown}
                 >
-                    { (provided, snapshot) => (
+                    <Droppable
+                        droppableId="tag-panel-droppable"
+                        type="draggable-TagTile"
+                    >
+                        {(provided, snapshot) => (
                             <div
-                                className="mx_TagPanel_tagTileContainer"
+                                className="mx_GroupFilterPanel_tagTileContainer"
                                 ref={provided.innerRef}
                             >
-                                { this.renderGlobalIcon() }
-                                { tags }
-                                <div>
-                                    {createButton}
-                                </div>
-                                { provided.placeholder }
+                                {this.renderGlobalIcon()}
+                                {tags}
+                                <div>{createButton}</div>
+                                {provided.placeholder}
                             </div>
-                    ) }
-                </Droppable>
-            </AutoHideScrollbar>
-        </div>;
+                        )}
+                    </Droppable>
+                </AutoHideScrollbar>
+            </div>
+        );
     }
 }
-export default TagPanel;
+export default GroupFilterPanel;

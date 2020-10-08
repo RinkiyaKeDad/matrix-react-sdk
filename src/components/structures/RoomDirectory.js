@@ -16,21 +16,24 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-import React from 'react';
-import {MatrixClientPeg} from "../../MatrixClientPeg";
+import React from "react";
+import { MatrixClientPeg } from "../../MatrixClientPeg";
 import * as sdk from "../../index";
 import dis from "../../dispatcher/dispatcher";
 import Modal from "../../Modal";
-import { linkifyAndSanitizeHtml } from '../../HtmlUtils';
-import PropTypes from 'prop-types';
-import { _t } from '../../languageHandler';
-import SdkConfig from '../../SdkConfig';
-import { instanceForInstanceId, protocolNameForInstanceId } from '../../utils/DirectoryUtils';
-import Analytics from '../../Analytics';
-import {getHttpUriForMxc} from "matrix-js-sdk/src/content-repo";
-import {ALL_ROOMS} from "../views/directory/NetworkDropdown";
+import { linkifyAndSanitizeHtml } from "../../HtmlUtils";
+import PropTypes from "prop-types";
+import { _t } from "../../languageHandler";
+import SdkConfig from "../../SdkConfig";
+import {
+    instanceForInstanceId,
+    protocolNameForInstanceId,
+} from "../../utils/DirectoryUtils";
+import Analytics from "../../Analytics";
+import { getHttpUriForMxc } from "matrix-js-sdk/src/content-repo";
+import { ALL_ROOMS } from "../views/directory/NetworkDropdown";
 import SettingsStore from "../../settings/SettingsStore";
-import TagOrderStore from "../../stores/TagOrderStore";
+import GroupFilterOrderStore from "../../stores/GroupFilterOrderStore";
 import GroupStore from "../../stores/GroupStore";
 import FlairStore from "../../stores/FlairStore";
 
@@ -38,7 +41,7 @@ const MAX_NAME_LENGTH = 80;
 const MAX_TOPIC_LENGTH = 160;
 
 function track(action) {
-    Analytics.trackEvent('RoomDirectory', action);
+    Analytics.trackEvent("RoomDirectory", action);
 }
 
 export default class RoomDirectory extends React.Component {
@@ -49,7 +52,7 @@ export default class RoomDirectory extends React.Component {
     constructor(props) {
         super(props);
 
-        const selectedCommunityId = TagOrderStore.getSelectedTags()[0];
+        const selectedCommunityId = GroupFilterOrderStore.getSelectedTags()[0];
         this.state = {
             publicRooms: [],
             loading: true,
@@ -58,7 +61,9 @@ export default class RoomDirectory extends React.Component {
             instanceId: undefined,
             roomServer: MatrixClientPeg.getHomeserverName(),
             filterString: null,
-            selectedCommunityId: SettingsStore.getValue("feature_communities_v2_prototypes")
+            selectedCommunityId: SettingsStore.getValue(
+                "feature_communities_v2_prototypes"
+            )
                 ? selectedCommunityId
                 : null,
             communityName: null,
@@ -70,43 +75,53 @@ export default class RoomDirectory extends React.Component {
         this.scrollPanel = null;
         this.protocols = null;
 
-        this.setState({protocolsLoading: true});
+        this.setState({ protocolsLoading: true });
         if (!MatrixClientPeg.get()) {
             // We may not have a client yet when invoked from welcome page
-            this.setState({protocolsLoading: false});
+            this.setState({ protocolsLoading: false });
             return;
         }
 
         if (!this.state.selectedCommunityId) {
-            MatrixClientPeg.get().getThirdpartyProtocols().then((response) => {
-                this.protocols = response;
-                this.setState({protocolsLoading: false});
-            }, (err) => {
-                console.warn(`error loading third party protocols: ${err}`);
-                this.setState({protocolsLoading: false});
-                if (MatrixClientPeg.get().isGuest()) {
-                    // Guests currently aren't allowed to use this API, so
-                    // ignore this as otherwise this error is literally the
-                    // thing you see when loading the client!
-                    return;
-                }
-                track('Failed to get protocol list from homeserver');
-                const brand = SdkConfig.get().brand;
-                this.setState({
-                    error: _t(
-                        '%(brand)s failed to get the protocol list from the homeserver. ' +
-                        'The homeserver may be too old to support third party networks.',
-                        {brand},
-                    ),
-                });
-            });
+            MatrixClientPeg.get()
+                .getThirdpartyProtocols()
+                .then(
+                    (response) => {
+                        this.protocols = response;
+                        this.setState({ protocolsLoading: false });
+                    },
+                    (err) => {
+                        console.warn(
+                            `error loading third party protocols: ${err}`
+                        );
+                        this.setState({ protocolsLoading: false });
+                        if (MatrixClientPeg.get().isGuest()) {
+                            // Guests currently aren't allowed to use this API, so
+                            // ignore this as otherwise this error is literally the
+                            // thing you see when loading the client!
+                            return;
+                        }
+                        track("Failed to get protocol list from homeserver");
+                        const brand = SdkConfig.get().brand;
+                        this.setState({
+                            error: _t(
+                                "%(brand)s failed to get the protocol list from the homeserver. " +
+                                    "The homeserver may be too old to support third party networks.",
+                                { brand }
+                            ),
+                        });
+                    }
+                );
         } else {
             // We don't use the protocols in the communities v2 prototype experience
-            this.setState({protocolsLoading: false});
+            this.setState({ protocolsLoading: false });
 
             // Grab the profile info async
-            FlairStore.getGroupProfileCached(MatrixClientPeg.get(), this.state.selectedCommunityId).then(profile => {
-                this.setState({communityName: profile.name});
+            FlairStore.getGroupProfileCached(
+                MatrixClientPeg.get(),
+                this.state.selectedCommunityId
+            ).then((profile) => {
+                this.setState({ communityName: profile.name });
             });
         }
 
@@ -123,26 +138,37 @@ export default class RoomDirectory extends React.Component {
     refreshRoomList = () => {
         if (this.state.selectedCommunityId) {
             this.setState({
-                publicRooms: GroupStore.getGroupRooms(this.state.selectedCommunityId).map(r => {
-                    return {
-                        // Translate all the group properties to the directory format
-                        room_id: r.roomId,
-                        name: r.name,
-                        topic: r.topic,
-                        canonical_alias: r.canonicalAlias,
-                        num_joined_members: r.numJoinedMembers,
-                        avatarUrl: r.avatarUrl,
-                        world_readable: r.worldReadable,
-                        guest_can_join: r.guestsCanJoin,
-                    };
-                }).filter(r => {
-                    const filterString = this.state.filterString;
-                    if (filterString) {
-                        const containedIn = (s: string) => (s || "").toLowerCase().includes(filterString.toLowerCase());
-                        return containedIn(r.name) || containedIn(r.topic) || containedIn(r.canonical_alias);
-                    }
-                    return true;
-                }),
+                publicRooms: GroupStore.getGroupRooms(
+                    this.state.selectedCommunityId
+                )
+                    .map((r) => {
+                        return {
+                            // Translate all the group properties to the directory format
+                            room_id: r.roomId,
+                            name: r.name,
+                            topic: r.topic,
+                            canonical_alias: r.canonicalAlias,
+                            num_joined_members: r.numJoinedMembers,
+                            avatarUrl: r.avatarUrl,
+                            world_readable: r.worldReadable,
+                            guest_can_join: r.guestsCanJoin,
+                        };
+                    })
+                    .filter((r) => {
+                        const filterString = this.state.filterString;
+                        if (filterString) {
+                            const containedIn = (s: string) =>
+                                (s || "")
+                                    .toLowerCase()
+                                    .includes(filterString.toLowerCase());
+                            return (
+                                containedIn(r.name) ||
+                                containedIn(r.topic) ||
+                                containedIn(r.canonical_alias)
+                            );
+                        }
+                        return true;
+                    }),
                 loading: false,
             });
             return;
@@ -169,7 +195,7 @@ export default class RoomDirectory extends React.Component {
         // remember the next batch token when we sent the request
         // too. If it's changed, appending to the list will corrupt it.
         const my_next_batch = this.nextBatch;
-        const opts = {limit: 20};
+        const opts = { limit: 20 };
         if (my_server != MatrixClientPeg.getHomeserverName()) {
             opts.server = my_server;
         }
@@ -179,56 +205,72 @@ export default class RoomDirectory extends React.Component {
             opts.third_party_instance_id = this.state.instanceId;
         }
         if (this.nextBatch) opts.since = this.nextBatch;
-        if (my_filter_string) opts.filter = { generic_search_term: my_filter_string };
-        return MatrixClientPeg.get().publicRooms(opts).then((data) => {
-            if (
-                my_filter_string != this.state.filterString ||
-                my_server != this.state.roomServer ||
-                my_next_batch != this.nextBatch) {
-                // if the filter or server has changed since this request was sent,
-                // throw away the result (don't even clear the busy flag
-                // since we must still have a request in flight)
-                return;
-            }
+        if (my_filter_string)
+            opts.filter = { generic_search_term: my_filter_string };
+        return MatrixClientPeg.get()
+            .publicRooms(opts)
+            .then(
+                (data) => {
+                    if (
+                        my_filter_string != this.state.filterString ||
+                        my_server != this.state.roomServer ||
+                        my_next_batch != this.nextBatch
+                    ) {
+                        // if the filter or server has changed since this request was sent,
+                        // throw away the result (don't even clear the busy flag
+                        // since we must still have a request in flight)
+                        return;
+                    }
 
-            if (this._unmounted) {
-                // if we've been unmounted, we don't care either.
-                return;
-            }
+                    if (this._unmounted) {
+                        // if we've been unmounted, we don't care either.
+                        return;
+                    }
 
-            this.nextBatch = data.next_batch;
-            this.setState((s) => {
-                s.publicRooms.push(...(data.chunk || []));
-                s.loading = false;
-                return s;
-            });
-            return Boolean(data.next_batch);
-        }, (err) => {
-            if (
-                my_filter_string != this.state.filterString ||
-                my_server != this.state.roomServer ||
-                my_next_batch != this.nextBatch) {
-                // as above: we don't care about errors for old
-                // requests either
-                return;
-            }
+                    this.nextBatch = data.next_batch;
+                    this.setState((s) => {
+                        s.publicRooms.push(...(data.chunk || []));
+                        s.loading = false;
+                        return s;
+                    });
+                    return Boolean(data.next_batch);
+                },
+                (err) => {
+                    if (
+                        my_filter_string != this.state.filterString ||
+                        my_server != this.state.roomServer ||
+                        my_next_batch != this.nextBatch
+                    ) {
+                        // as above: we don't care about errors for old
+                        // requests either
+                        return;
+                    }
 
-            if (this._unmounted) {
-                // if we've been unmounted, we don't care either.
-                return;
-            }
+                    if (this._unmounted) {
+                        // if we've been unmounted, we don't care either.
+                        return;
+                    }
 
-            console.error("Failed to get publicRooms: %s", JSON.stringify(err));
-            track('Failed to get public room list');
-            const brand = SdkConfig.get().brand;
-            this.setState({
-                loading: false,
-                error: (
-                    _t('%(brand)s failed to get the public room list.', { brand }) +
-                    (err && err.message) ? err.message : _t('The homeserver may be unavailable or overloaded.')
-                ),
-            });
-        });
+                    console.error(
+                        "Failed to get publicRooms: %s",
+                        JSON.stringify(err)
+                    );
+                    track("Failed to get public room list");
+                    const brand = SdkConfig.get().brand;
+                    this.setState({
+                        loading: false,
+                        error:
+                            _t(
+                                "%(brand)s failed to get the public room list.",
+                                { brand }
+                            ) + (err && err.message)
+                                ? err.message
+                                : _t(
+                                      "The homeserver may be unavailable or overloaded."
+                                  ),
+                    });
+                }
+            );
     }
 
     /**
@@ -240,44 +282,65 @@ export default class RoomDirectory extends React.Component {
      */
     removeFromDirectory(room) {
         const alias = get_display_alias_for_room(room);
-        const name = room.name || alias || _t('Unnamed room');
+        const name = room.name || alias || _t("Unnamed room");
 
         const QuestionDialog = sdk.getComponent("dialogs.QuestionDialog");
         const ErrorDialog = sdk.getComponent("dialogs.ErrorDialog");
 
         let desc;
         if (alias) {
-            desc = _t('Delete the room address %(alias)s and remove %(name)s from the directory?', {alias, name});
+            desc = _t(
+                "Delete the room address %(alias)s and remove %(name)s from the directory?",
+                { alias, name }
+            );
         } else {
-            desc = _t('Remove %(name)s from the directory?', {name: name});
+            desc = _t("Remove %(name)s from the directory?", { name: name });
         }
 
-        Modal.createTrackedDialog('Remove from Directory', '', QuestionDialog, {
-            title: _t('Remove from Directory'),
+        Modal.createTrackedDialog("Remove from Directory", "", QuestionDialog, {
+            title: _t("Remove from Directory"),
             description: desc,
             onFinished: (should_delete) => {
                 if (!should_delete) return;
 
                 const Loader = sdk.getComponent("elements.Spinner");
                 const modal = Modal.createDialog(Loader);
-                let step = _t('remove %(name)s from the directory.', {name: name});
-
-                MatrixClientPeg.get().setRoomDirectoryVisibility(room.room_id, 'private').then(() => {
-                    if (!alias) return;
-                    step = _t('delete the address.');
-                    return MatrixClientPeg.get().deleteAlias(alias);
-                }).then(() => {
-                    modal.close();
-                    this.refreshRoomList();
-                }, (err) => {
-                    modal.close();
-                    this.refreshRoomList();
-                    console.error("Failed to " + step + ": " + err);
-                    Modal.createTrackedDialog('Remove from Directory Error', '', ErrorDialog, {
-                        title: _t('Error'),
-                        description: ((err && err.message) ? err.message : _t('The server may be unavailable or overloaded')),
-                    });
+                let step = _t("remove %(name)s from the directory.", {
+                    name: name,
                 });
+
+                MatrixClientPeg.get()
+                    .setRoomDirectoryVisibility(room.room_id, "private")
+                    .then(() => {
+                        if (!alias) return;
+                        step = _t("delete the address.");
+                        return MatrixClientPeg.get().deleteAlias(alias);
+                    })
+                    .then(
+                        () => {
+                            modal.close();
+                            this.refreshRoomList();
+                        },
+                        (err) => {
+                            modal.close();
+                            this.refreshRoomList();
+                            console.error("Failed to " + step + ": " + err);
+                            Modal.createTrackedDialog(
+                                "Remove from Directory Error",
+                                "",
+                                ErrorDialog,
+                                {
+                                    title: _t("Error"),
+                                    description:
+                                        err && err.message
+                                            ? err.message
+                                            : _t(
+                                                  "The server may be unavailable or overloaded"
+                                              ),
+                                }
+                            );
+                        }
+                    );
             },
         });
     }
@@ -294,15 +357,18 @@ export default class RoomDirectory extends React.Component {
     onOptionChange = (server, instanceId) => {
         // clear next batch so we don't try to load more rooms
         this.nextBatch = null;
-        this.setState({
-            // Clear the public rooms out here otherwise we needlessly
-            // spend time filtering lots of rooms when we're about to
-            // to clear the list anyway.
-            publicRooms: [],
-            roomServer: server,
-            instanceId: instanceId,
-            error: null,
-        }, this.refreshRoomList);
+        this.setState(
+            {
+                // Clear the public rooms out here otherwise we needlessly
+                // spend time filtering lots of rooms when we're about to
+                // to clear the list anyway.
+                publicRooms: [],
+                roomServer: server,
+                instanceId: instanceId,
+                error: null,
+            },
+            this.refreshRoomList
+        );
         // We also refresh the room list each time even though this
         // filtering is client-side. It hopefully won't be client side
         // for very long, and we may have fetched a thousand rooms to
@@ -337,9 +403,12 @@ export default class RoomDirectory extends React.Component {
 
     onFilterClear = () => {
         // update immediately
-        this.setState({
-            filterString: null,
-        }, this.refreshRoomList);
+        this.setState(
+            {
+                filterString: null,
+            },
+            this.refreshRoomList
+        );
 
         if (this.filterTimeout) {
             clearTimeout(this.filterTimeout);
@@ -351,48 +420,93 @@ export default class RoomDirectory extends React.Component {
         if (!this.state.instanceId || this.state.instanceId === ALL_ROOMS) {
             // If the user specified an alias without a domain, add on whichever server is selected
             // in the dropdown
-            if (alias.indexOf(':') == -1) {
-                alias = alias + ':' + this.state.roomServer;
+            if (alias.indexOf(":") == -1) {
+                alias = alias + ":" + this.state.roomServer;
             }
             this.showRoomAlias(alias, true);
         } else {
             // This is a 3rd party protocol. Let's see if we can join it
-            const protocolName = protocolNameForInstanceId(this.protocols, this.state.instanceId);
-            const instance = instanceForInstanceId(this.protocols, this.state.instanceId);
-            const fields = protocolName ? this._getFieldsForThirdPartyLocation(alias, this.protocols[protocolName], instance) : null;
+            const protocolName = protocolNameForInstanceId(
+                this.protocols,
+                this.state.instanceId
+            );
+            const instance = instanceForInstanceId(
+                this.protocols,
+                this.state.instanceId
+            );
+            const fields = protocolName
+                ? this._getFieldsForThirdPartyLocation(
+                      alias,
+                      this.protocols[protocolName],
+                      instance
+                  )
+                : null;
             if (!fields) {
                 const ErrorDialog = sdk.getComponent("dialogs.ErrorDialog");
                 const brand = SdkConfig.get().brand;
-                Modal.createTrackedDialog('Unable to join network', '', ErrorDialog, {
-                    title: _t('Unable to join network'),
-                    description: _t('%(brand)s does not know how to join a room on this network', { brand }),
-                });
+                Modal.createTrackedDialog(
+                    "Unable to join network",
+                    "",
+                    ErrorDialog,
+                    {
+                        title: _t("Unable to join network"),
+                        description: _t(
+                            "%(brand)s does not know how to join a room on this network",
+                            { brand }
+                        ),
+                    }
+                );
                 return;
             }
-            MatrixClientPeg.get().getThirdpartyLocation(protocolName, fields).then((resp) => {
-                if (resp.length > 0 && resp[0].alias) {
-                    this.showRoomAlias(resp[0].alias, true);
-                } else {
-                    const ErrorDialog = sdk.getComponent("dialogs.ErrorDialog");
-                    Modal.createTrackedDialog('Room not found', '', ErrorDialog, {
-                        title: _t('Room not found'),
-                        description: _t('Couldn\'t find a matching Matrix room'),
-                    });
-                }
-            }, (e) => {
-                const ErrorDialog = sdk.getComponent("dialogs.ErrorDialog");
-                Modal.createTrackedDialog('Fetching third party location failed', '', ErrorDialog, {
-                    title: _t('Fetching third party location failed'),
-                    description: _t('Unable to look up room ID from server'),
-                });
-            });
+            MatrixClientPeg.get()
+                .getThirdpartyLocation(protocolName, fields)
+                .then(
+                    (resp) => {
+                        if (resp.length > 0 && resp[0].alias) {
+                            this.showRoomAlias(resp[0].alias, true);
+                        } else {
+                            const ErrorDialog = sdk.getComponent(
+                                "dialogs.ErrorDialog"
+                            );
+                            Modal.createTrackedDialog(
+                                "Room not found",
+                                "",
+                                ErrorDialog,
+                                {
+                                    title: _t("Room not found"),
+                                    description: _t(
+                                        "Couldn't find a matching Matrix room"
+                                    ),
+                                }
+                            );
+                        }
+                    },
+                    (e) => {
+                        const ErrorDialog = sdk.getComponent(
+                            "dialogs.ErrorDialog"
+                        );
+                        Modal.createTrackedDialog(
+                            "Fetching third party location failed",
+                            "",
+                            ErrorDialog,
+                            {
+                                title: _t(
+                                    "Fetching third party location failed"
+                                ),
+                                description: _t(
+                                    "Unable to look up room ID from server"
+                                ),
+                            }
+                        );
+                    }
+                );
         }
     };
 
     onPreviewClick = (ev, room) => {
         this.props.onFinished();
         dis.dispatch({
-            action: 'view_room',
+            action: "view_room",
             room_id: room.room_id,
             should_peek: true,
         });
@@ -402,7 +516,7 @@ export default class RoomDirectory extends React.Component {
     onViewClick = (ev, room) => {
         this.props.onFinished();
         dis.dispatch({
-            action: 'view_room',
+            action: "view_room",
             room_id: room.room_id,
             should_peek: false,
         });
@@ -414,22 +528,22 @@ export default class RoomDirectory extends React.Component {
         ev.stopPropagation();
     };
 
-    onCreateRoomClick = room => {
+    onCreateRoomClick = (room) => {
         this.props.onFinished();
         dis.dispatch({
-            action: 'view_create_room',
+            action: "view_create_room",
             public: true,
         });
     };
 
-    showRoomAlias(alias, autoJoin=false) {
+    showRoomAlias(alias, autoJoin = false) {
         this.showRoom(null, alias, autoJoin);
     }
 
-    showRoom(room, room_alias, autoJoin=false) {
+    showRoom(room, room_alias, autoJoin = false) {
         this.props.onFinished();
         const payload = {
-            action: 'view_room',
+            action: "view_room",
             auto_join: autoJoin,
         };
         if (room) {
@@ -438,7 +552,7 @@ export default class RoomDirectory extends React.Component {
             // to the directory.
             if (MatrixClientPeg.get().isGuest()) {
                 if (!room.world_readable && !room.guest_can_join) {
-                    dis.dispatch({action: 'require_registration'});
+                    dis.dispatch({ action: "require_registration" });
                     return;
                 }
             }
@@ -451,7 +565,7 @@ export default class RoomDirectory extends React.Component {
                 avatarUrl: room.avatar_url,
                 // XXX: This logic is duplicated from the JS SDK which
                 // would normally decide what the name is.
-                name: room.name || room_alias || _t('Unnamed room'),
+                name: room.name || room_alias || _t("Unnamed room"),
             };
 
             if (this.state.roomServer) {
@@ -475,62 +589,96 @@ export default class RoomDirectory extends React.Component {
     getRow(room) {
         const client = MatrixClientPeg.get();
         const clientRoom = client.getRoom(room.room_id);
-        const hasJoinedRoom = clientRoom && clientRoom.getMyMembership() === "join";
+        const hasJoinedRoom =
+            clientRoom && clientRoom.getMyMembership() === "join";
         const isGuest = client.isGuest();
-        const BaseAvatar = sdk.getComponent('avatars.BaseAvatar');
-        const AccessibleButton = sdk.getComponent('elements.AccessibleButton');
+        const BaseAvatar = sdk.getComponent("avatars.BaseAvatar");
+        const AccessibleButton = sdk.getComponent("elements.AccessibleButton");
         let previewButton;
         let joinOrViewButton;
 
         if (room.world_readable && !hasJoinedRoom) {
             previewButton = (
-                <AccessibleButton kind="secondary" onClick={(ev) => this.onPreviewClick(ev, room)}>{_t("Preview")}</AccessibleButton>
+                <AccessibleButton
+                    kind="secondary"
+                    onClick={(ev) => this.onPreviewClick(ev, room)}
+                >
+                    {_t("Preview")}
+                </AccessibleButton>
             );
         }
         if (hasJoinedRoom) {
             joinOrViewButton = (
-                <AccessibleButton kind="secondary" onClick={(ev) => this.onViewClick(ev, room)}>{_t("View")}</AccessibleButton>
+                <AccessibleButton
+                    kind="secondary"
+                    onClick={(ev) => this.onViewClick(ev, room)}
+                >
+                    {_t("View")}
+                </AccessibleButton>
             );
         } else if (!isGuest || room.guest_can_join) {
             joinOrViewButton = (
-                <AccessibleButton kind="primary" onClick={(ev) => this.onJoinClick(ev, room)}>{_t("Join")}</AccessibleButton>
+                <AccessibleButton
+                    kind="primary"
+                    onClick={(ev) => this.onJoinClick(ev, room)}
+                >
+                    {_t("Join")}
+                </AccessibleButton>
             );
         }
 
-        let name = room.name || get_display_alias_for_room(room) || _t('Unnamed room');
+        let name =
+            room.name || get_display_alias_for_room(room) || _t("Unnamed room");
         if (name.length > MAX_NAME_LENGTH) {
             name = `${name.substring(0, MAX_NAME_LENGTH)}...`;
         }
 
-        let topic = room.topic || '';
+        let topic = room.topic || "";
         if (topic.length > MAX_TOPIC_LENGTH) {
             topic = `${topic.substring(0, MAX_TOPIC_LENGTH)}...`;
         }
         topic = linkifyAndSanitizeHtml(topic);
         const avatarUrl = getHttpUriForMxc(
-                                MatrixClientPeg.get().getHomeserverUrl(),
-                                room.avatar_url, 32, 32, "crop",
-                            );
+            MatrixClientPeg.get().getHomeserverUrl(),
+            room.avatar_url,
+            32,
+            32,
+            "crop"
+        );
         return (
-            <tr key={ room.room_id }
+            <tr
+                key={room.room_id}
                 onClick={(ev) => this.onRoomClicked(room, ev)}
                 // cancel onMouseDown otherwise shift-clicking highlights text
-                onMouseDown={(ev) => {ev.preventDefault();}}
+                onMouseDown={(ev) => {
+                    ev.preventDefault();
+                }}
             >
                 <td className="mx_RoomDirectory_roomAvatar">
-                    <BaseAvatar width={32} height={32} resizeMethod='crop'
-                        name={ name } idName={ name }
-                        url={ avatarUrl } />
+                    <BaseAvatar
+                        width={32}
+                        height={32}
+                        resizeMethod="crop"
+                        name={name}
+                        idName={name}
+                        url={avatarUrl}
+                    />
                 </td>
                 <td className="mx_RoomDirectory_roomDescription">
-                    <div className="mx_RoomDirectory_name">{ name }</div>&nbsp;
-                    <div className="mx_RoomDirectory_topic"
-                        onClick={ (ev) => { ev.stopPropagation(); } }
-                        dangerouslySetInnerHTML={{ __html: topic }} />
-                    <div className="mx_RoomDirectory_alias">{ get_display_alias_for_room(room) }</div>
+                    <div className="mx_RoomDirectory_name">{name}</div>&nbsp;
+                    <div
+                        className="mx_RoomDirectory_topic"
+                        onClick={(ev) => {
+                            ev.stopPropagation();
+                        }}
+                        dangerouslySetInnerHTML={{ __html: topic }}
+                    />
+                    <div className="mx_RoomDirectory_alias">
+                        {get_display_alias_for_room(room)}
+                    </div>
                 </td>
                 <td className="mx_RoomDirectory_roomMemberCount">
-                    { room.num_joined_members }
+                    {room.num_joined_members}
                 </td>
                 <td className="mx_RoomDirectory_preview">{previewButton}</td>
                 <td className="mx_RoomDirectory_join">{joinOrViewButton}</td>
@@ -572,7 +720,7 @@ export default class RoomDirectory extends React.Component {
      *
      * We pass it down to the scroll panel.
      */
-    handleScrollKey = ev => {
+    handleScrollKey = (ev) => {
         if (this.scrollPanel) {
             this.scrollPanel.handleScrollKey(ev);
         }
@@ -580,8 +728,8 @@ export default class RoomDirectory extends React.Component {
 
     render() {
         const Loader = sdk.getComponent("elements.Spinner");
-        const BaseDialog = sdk.getComponent('views.dialogs.BaseDialog');
-        const AccessibleButton = sdk.getComponent('elements.AccessibleButton');
+        const BaseDialog = sdk.getComponent("views.dialogs.BaseDialog");
+        const AccessibleButton = sdk.getComponent("elements.AccessibleButton");
 
         let content;
         if (this.state.error) {
@@ -589,7 +737,9 @@ export default class RoomDirectory extends React.Component {
         } else if (this.state.protocolsLoading) {
             content = <Loader />;
         } else {
-            const rows = (this.state.publicRooms || []).map(room => this.getRow(room));
+            const rows = (this.state.publicRooms || []).map((room) =>
+                this.getRow(room)
+            );
             // we still show the scrollpanel, at least for now, because
             // otherwise we don't fetch more because we don't get a fill
             // request from the scrollpanel because there isn't one
@@ -601,32 +751,42 @@ export default class RoomDirectory extends React.Component {
 
             let scrollpanel_content;
             if (rows.length === 0 && !this.state.loading) {
-                scrollpanel_content = <i>{ _t('No rooms to show') }</i>;
+                scrollpanel_content = <i>{_t("No rooms to show")}</i>;
             } else {
-                scrollpanel_content = <table className="mx_RoomDirectory_table">
-                    <tbody>
-                        { rows }
-                    </tbody>
-                </table>;
+                scrollpanel_content = (
+                    <table className="mx_RoomDirectory_table">
+                        <tbody>{rows}</tbody>
+                    </table>
+                );
             }
             const ScrollPanel = sdk.getComponent("structures.ScrollPanel");
-            content = <ScrollPanel ref={this.collectScrollPanel}
-                className="mx_RoomDirectory_tableWrapper"
-                onFillRequest={ this.onFillRequest }
-                stickyBottom={false}
-                startAtBottom={false}
-            >
-                { scrollpanel_content }
-                { spinner }
-            </ScrollPanel>;
+            content = (
+                <ScrollPanel
+                    ref={this.collectScrollPanel}
+                    className="mx_RoomDirectory_tableWrapper"
+                    onFillRequest={this.onFillRequest}
+                    stickyBottom={false}
+                    startAtBottom={false}
+                >
+                    {scrollpanel_content}
+                    {spinner}
+                </ScrollPanel>
+            );
         }
 
         let listHeader;
         if (!this.state.protocolsLoading) {
-            const NetworkDropdown = sdk.getComponent('directory.NetworkDropdown');
-            const DirectorySearchBox = sdk.getComponent('elements.DirectorySearchBox');
+            const NetworkDropdown = sdk.getComponent(
+                "directory.NetworkDropdown"
+            );
+            const DirectorySearchBox = sdk.getComponent(
+                "elements.DirectorySearchBox"
+            );
 
-            const protocolName = protocolNameForInstanceId(this.protocols, this.state.instanceId);
+            const protocolName = protocolNameForInstanceId(
+                this.protocols,
+                this.state.instanceId
+            );
             let instance_expected_field_type;
             if (
                 protocolName &&
@@ -635,21 +795,38 @@ export default class RoomDirectory extends React.Component {
                 this.protocols[protocolName].location_fields.length > 0 &&
                 this.protocols[protocolName].field_types
             ) {
-                const last_field = this.protocols[protocolName].location_fields.slice(-1)[0];
-                instance_expected_field_type = this.protocols[protocolName].field_types[last_field];
+                const last_field = this.protocols[
+                    protocolName
+                ].location_fields.slice(-1)[0];
+                instance_expected_field_type = this.protocols[protocolName]
+                    .field_types[last_field];
             }
 
-            let placeholder = _t('Find a room…');
+            let placeholder = _t("Find a room…");
             if (!this.state.instanceId || this.state.instanceId === ALL_ROOMS) {
-                placeholder = _t("Find a room… (e.g. %(exampleRoom)s)", {exampleRoom: "#example:" + this.state.roomServer});
+                placeholder = _t("Find a room… (e.g. %(exampleRoom)s)", {
+                    exampleRoom: "#example:" + this.state.roomServer,
+                });
             } else if (instance_expected_field_type) {
                 placeholder = instance_expected_field_type.placeholder;
             }
 
-            let showJoinButton = this._stringLooksLikeId(this.state.filterString, instance_expected_field_type);
+            let showJoinButton = this._stringLooksLikeId(
+                this.state.filterString,
+                instance_expected_field_type
+            );
             if (protocolName) {
-                const instance = instanceForInstanceId(this.protocols, this.state.instanceId);
-                if (this._getFieldsForThirdPartyLocation(this.state.filterString, this.protocols[protocolName], instance) === null) {
+                const instance = instanceForInstanceId(
+                    this.protocols,
+                    this.state.instanceId
+                );
+                if (
+                    this._getFieldsForThirdPartyLocation(
+                        this.state.filterString,
+                        this.protocols[protocolName],
+                        instance
+                    ) === null
+                ) {
                     showJoinButton = false;
                 }
             }
@@ -666,35 +843,47 @@ export default class RoomDirectory extends React.Component {
                 dropdown = null;
             }
 
-            listHeader = <div className="mx_RoomDirectory_listheader">
-                <DirectorySearchBox
-                    className="mx_RoomDirectory_searchbox"
-                    onChange={this.onFilterChange}
-                    onClear={this.onFilterClear}
-                    onJoinClick={this.onJoinFromSearchClick}
-                    placeholder={placeholder}
-                    showJoinButton={showJoinButton}
-                />
-                {dropdown}
-            </div>;
-        }
-        const explanation =
-            _t("If you can't find the room you're looking for, ask for an invite or <a>Create a new room</a>.", null,
-                {a: sub => {
-                    return (<AccessibleButton
-                        kind="secondary"
-                        onClick={this.onCreateRoomClick}
-                    >{sub}</AccessibleButton>);
-                }},
+            listHeader = (
+                <div className="mx_RoomDirectory_listheader">
+                    <DirectorySearchBox
+                        className="mx_RoomDirectory_searchbox"
+                        onChange={this.onFilterChange}
+                        onClear={this.onFilterClear}
+                        onJoinClick={this.onJoinFromSearchClick}
+                        placeholder={placeholder}
+                        showJoinButton={showJoinButton}
+                    />
+                    {dropdown}
+                </div>
             );
+        }
+        const explanation = _t(
+            "If you can't find the room you're looking for, ask for an invite or <a>Create a new room</a>.",
+            null,
+            {
+                a: (sub) => {
+                    return (
+                        <AccessibleButton
+                            kind="secondary"
+                            onClick={this.onCreateRoomClick}
+                        >
+                            {sub}
+                        </AccessibleButton>
+                    );
+                },
+            }
+        );
 
         const title = this.state.selectedCommunityId
             ? _t("Explore rooms in %(communityName)s", {
-                communityName: this.state.communityName || this.state.selectedCommunityId,
-            }) : _t("Explore rooms");
+                  communityName:
+                      this.state.communityName ||
+                      this.state.selectedCommunityId,
+              })
+            : _t("Explore rooms");
         return (
             <BaseDialog
-                className={'mx_RoomDirectory_dialog'}
+                className={"mx_RoomDirectory_dialog"}
                 hasCancel={true}
                 onFinished={this.props.onFinished}
                 title={title}

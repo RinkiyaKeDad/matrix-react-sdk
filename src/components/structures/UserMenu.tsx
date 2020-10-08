@@ -21,20 +21,23 @@ import { ActionPayload } from "../../dispatcher/payloads";
 import { Action } from "../../dispatcher/actions";
 import { _t } from "../../languageHandler";
 import { ContextMenuButton } from "./ContextMenu";
-import {USER_NOTIFICATIONS_TAB, USER_SECURITY_TAB} from "../views/dialogs/UserSettingsDialog";
+import {
+    USER_NOTIFICATIONS_TAB,
+    USER_SECURITY_TAB,
+} from "../views/dialogs/UserSettingsDialog";
 import { OpenToTabPayload } from "../../dispatcher/payloads/OpenToTabPayload";
 import RedesignFeedbackDialog from "../views/dialogs/RedesignFeedbackDialog";
 import Modal from "../../Modal";
 import LogoutDialog from "../views/dialogs/LogoutDialog";
 import SettingsStore from "../../settings/SettingsStore";
-import {getCustomTheme} from "../../theme";
-import {getHostingLink} from "../../utils/HostingLink";
-import {ButtonEvent} from "../views/elements/AccessibleButton";
+import { getCustomTheme } from "../../theme";
+import { getHostingLink } from "../../utils/HostingLink";
+import { ButtonEvent } from "../views/elements/AccessibleButton";
 import SdkConfig from "../../SdkConfig";
-import {getHomePageUrl} from "../../utils/pages";
+import { getHomePageUrl } from "../../utils/pages";
 import { OwnProfileStore } from "../../stores/OwnProfileStore";
 import { UPDATE_EVENT } from "../../stores/AsyncStore";
-import BaseAvatar from '../views/avatars/BaseAvatar';
+import BaseAvatar from "../views/avatars/BaseAvatar";
 import classNames from "classnames";
 import AccessibleTooltipButton from "../views/elements/AccessibleTooltipButton";
 import { SettingLevel } from "../../settings/SettingLevel";
@@ -44,7 +47,7 @@ import IconizedContextMenu, {
 } from "../views/context_menus/IconizedContextMenu";
 import { CommunityPrototypeStore } from "../../stores/CommunityPrototypeStore";
 import * as fbEmitter from "fbemitter";
-import TagOrderStore from "../../stores/TagOrderStore";
+import GroupFilterOrderStore from "../../stores/GroupFilterOrderStore";
 import { showCommunityInviteDialog } from "../../RoomInvite";
 import dis from "../../dispatcher/dispatcher";
 import { RightPanelPhases } from "../../stores/RightPanelStorePhases";
@@ -85,13 +88,21 @@ export default class UserMenu extends React.Component<IProps, IState> {
 
     public componentDidMount() {
         this.dispatcherRef = defaultDispatcher.register(this.onAction);
-        this.themeWatcherRef = SettingsStore.watchSetting("theme", null, this.onThemeChanged);
-        this.tagStoreRef = TagOrderStore.addListener(this.onTagStoreUpdate);
+        this.themeWatcherRef = SettingsStore.watchSetting(
+            "theme",
+            null,
+            this.onThemeChanged
+        );
+        this.tagStoreRef = GroupFilterOrderStore.addListener(
+            this.onTagStoreUpdate
+        );
     }
 
     public componentWillUnmount() {
-        if (this.themeWatcherRef) SettingsStore.unwatchSetting(this.themeWatcherRef);
-        if (this.dispatcherRef) defaultDispatcher.unregister(this.dispatcherRef);
+        if (this.themeWatcherRef)
+            SettingsStore.unwatchSetting(this.themeWatcherRef);
+        if (this.dispatcherRef)
+            defaultDispatcher.unregister(this.dispatcherRef);
         OwnProfileStore.instance.off(UPDATE_EVENT, this.onProfileUpdate);
         this.tagStoreRef.remove();
     }
@@ -115,14 +126,14 @@ export default class UserMenu extends React.Component<IProps, IState> {
     };
 
     private onThemeChanged = () => {
-        this.setState({isDarkTheme: this.isUserOnDarkTheme()});
+        this.setState({ isDarkTheme: this.isUserOnDarkTheme() });
     };
 
     private onAction = (ev: ActionPayload) => {
         if (ev.action !== Action.ToggleUserMenu) return; // not interested
 
         if (this.state.contextMenuPosition) {
-            this.setState({contextMenuPosition: null});
+            this.setState({ contextMenuPosition: null });
         } else {
             if (this.buttonRef.current) this.buttonRef.current.click();
         }
@@ -132,7 +143,7 @@ export default class UserMenu extends React.Component<IProps, IState> {
         ev.preventDefault();
         ev.stopPropagation();
         const target = ev.target as HTMLButtonElement;
-        this.setState({contextMenuPosition: target.getBoundingClientRect()});
+        this.setState({ contextMenuPosition: target.getBoundingClientRect() });
     };
 
     private onContextMenu = (ev: React.MouseEvent) => {
@@ -149,7 +160,7 @@ export default class UserMenu extends React.Component<IProps, IState> {
     };
 
     private onCloseMenu = () => {
-        this.setState({contextMenuPosition: null});
+        this.setState({ contextMenuPosition: null });
     };
 
     private onSwitchThemeClick = (ev: React.MouseEvent) => {
@@ -157,7 +168,12 @@ export default class UserMenu extends React.Component<IProps, IState> {
         ev.stopPropagation();
 
         // Disable system theme matching if the user hits this button
-        SettingsStore.setValue("use_system_theme", null, SettingLevel.DEVICE, false);
+        SettingsStore.setValue(
+            "use_system_theme",
+            null,
+            SettingLevel.DEVICE,
+            false
+        );
 
         const newTheme = this.state.isDarkTheme ? "light" : "dark";
         SettingsStore.setValue("theme", null, SettingLevel.DEVICE, newTheme); // set at same level as Appearance tab
@@ -167,9 +183,12 @@ export default class UserMenu extends React.Component<IProps, IState> {
         ev.preventDefault();
         ev.stopPropagation();
 
-        const payload: OpenToTabPayload = {action: Action.ViewUserSettings, initialTabId: tabId};
+        const payload: OpenToTabPayload = {
+            action: Action.ViewUserSettings,
+            initialTabId: tabId,
+        };
         defaultDispatcher.dispatch(payload);
-        this.setState({contextMenuPosition: null}); // also close the menu
+        this.setState({ contextMenuPosition: null }); // also close the menu
     };
 
     private onShowArchived = (ev: ButtonEvent) => {
@@ -185,33 +204,42 @@ export default class UserMenu extends React.Component<IProps, IState> {
         ev.preventDefault();
         ev.stopPropagation();
 
-        Modal.createTrackedDialog('Report bugs & give feedback', '', RedesignFeedbackDialog);
-        this.setState({contextMenuPosition: null}); // also close the menu
+        Modal.createTrackedDialog(
+            "Report bugs & give feedback",
+            "",
+            RedesignFeedbackDialog
+        );
+        this.setState({ contextMenuPosition: null }); // also close the menu
     };
 
     private onSignOutClick = (ev: ButtonEvent) => {
         ev.preventDefault();
         ev.stopPropagation();
 
-        Modal.createTrackedDialog('Logout from LeftPanel', '', LogoutDialog);
-        this.setState({contextMenuPosition: null}); // also close the menu
+        Modal.createTrackedDialog("Logout from LeftPanel", "", LogoutDialog);
+        this.setState({ contextMenuPosition: null }); // also close the menu
     };
 
     private onHomeClick = (ev: ButtonEvent) => {
         ev.preventDefault();
         ev.stopPropagation();
 
-        defaultDispatcher.dispatch({action: 'view_home_page'});
+        defaultDispatcher.dispatch({ action: "view_home_page" });
     };
 
     private onCommunitySettingsClick = (ev: ButtonEvent) => {
         ev.preventDefault();
         ev.stopPropagation();
 
-        Modal.createTrackedDialog('Edit Community', '', EditCommunityPrototypeDialog, {
-            communityId: CommunityPrototypeStore.instance.getSelectedCommunityId(),
-        });
-        this.setState({contextMenuPosition: null}); // also close the menu
+        Modal.createTrackedDialog(
+            "Edit Community",
+            "",
+            EditCommunityPrototypeDialog,
+            {
+                communityId: CommunityPrototypeStore.instance.getSelectedCommunityId(),
+            }
+        );
+        this.setState({ contextMenuPosition: null }); // also close the menu
     };
 
     private onCommunityMembersClick = (ev: ButtonEvent) => {
@@ -224,27 +252,44 @@ export default class UserMenu extends React.Component<IProps, IState> {
         // anyways.
         const chat = CommunityPrototypeStore.instance.getSelectedCommunityGeneralChat();
         if (chat) {
+            dis.dispatch(
+                {
+                    action: "view_room",
+                    room_id: chat.roomId,
+                },
+                true
+            );
             dis.dispatch({
-                action: 'view_room',
-                room_id: chat.roomId,
-            }, true);
-            dis.dispatch({action: Action.SetRightPanelPhase, phase: RightPanelPhases.RoomMemberList});
+                action: Action.SetRightPanelPhase,
+                phase: RightPanelPhases.RoomMemberList,
+            });
         } else {
             // "This should never happen" clauses go here for the prototype.
-            Modal.createTrackedDialog('Failed to find general chat', '', ErrorDialog, {
-                title: _t('Failed to find the general chat for this community'),
-                description: _t("Failed to find the general chat for this community"),
-            });
+            Modal.createTrackedDialog(
+                "Failed to find general chat",
+                "",
+                ErrorDialog,
+                {
+                    title: _t(
+                        "Failed to find the general chat for this community"
+                    ),
+                    description: _t(
+                        "Failed to find the general chat for this community"
+                    ),
+                }
+            );
         }
-        this.setState({contextMenuPosition: null}); // also close the menu
+        this.setState({ contextMenuPosition: null }); // also close the menu
     };
 
     private onCommunityInviteClick = (ev: ButtonEvent) => {
         ev.preventDefault();
         ev.stopPropagation();
 
-        showCommunityInviteDialog(CommunityPrototypeStore.instance.getSelectedCommunityId());
-        this.setState({contextMenuPosition: null}); // also close the menu
+        showCommunityInviteDialog(
+            CommunityPrototypeStore.instance.getSelectedCommunityId()
+        );
+        this.setState({ contextMenuPosition: null }); // also close the menu
     };
 
     private renderContextMenu = (): React.ReactNode => {
@@ -258,17 +303,20 @@ export default class UserMenu extends React.Component<IProps, IState> {
             hostingLink = (
                 <div className="mx_UserMenu_contextMenu_header">
                     {_t(
-                        "<a>Upgrade</a> to your own domain", {},
+                        "<a>Upgrade</a> to your own domain",
+                        {},
                         {
-                            a: sub => (
+                            a: (sub) => (
                                 <a
                                     href={signupLink}
                                     target="_blank"
                                     rel="noreferrer noopener"
                                     tabIndex={-1}
-                                >{sub}</a>
+                                >
+                                    {sub}
+                                </a>
                             ),
-                        },
+                        }
                     )}
                 </div>
             );
@@ -302,12 +350,16 @@ export default class UserMenu extends React.Component<IProps, IState> {
                     <IconizedContextMenuOption
                         iconClassName="mx_UserMenu_iconBell"
                         label={_t("Notification settings")}
-                        onClick={(e) => this.onSettingsOpen(e, USER_NOTIFICATIONS_TAB)}
+                        onClick={(e) =>
+                            this.onSettingsOpen(e, USER_NOTIFICATIONS_TAB)
+                        }
                     />
                     <IconizedContextMenuOption
                         iconClassName="mx_UserMenu_iconLock"
                         label={_t("Security & privacy")}
-                        onClick={(e) => this.onSettingsOpen(e, USER_SECURITY_TAB)}
+                        onClick={(e) =>
+                            this.onSettingsOpen(e, USER_SECURITY_TAB)
+                        }
                     />
                     <IconizedContextMenuOption
                         iconClassName="mx_UserMenu_iconSettings"
@@ -398,46 +450,62 @@ export default class UserMenu extends React.Component<IProps, IState> {
                         />
                     </IconizedContextMenuOptionList>
                 </React.Fragment>
-            )
+            );
         }
 
         const classes = classNames({
-            "mx_UserMenu_contextMenu": true,
-            "mx_UserMenu_contextMenu_prototype": !!prototypeCommunityName,
+            mx_UserMenu_contextMenu: true,
+            mx_UserMenu_contextMenu_prototype: !!prototypeCommunityName,
         });
 
-        return <IconizedContextMenu
-            // numerical adjustments to overlap the context menu by just over the width of the
-            // menu icon and make it look connected
-            left={this.state.contextMenuPosition.width + this.state.contextMenuPosition.left - 10}
-            top={this.state.contextMenuPosition.top + this.state.contextMenuPosition.height + 8}
-            onFinished={this.onCloseMenu}
-            className={classes}
-        >
-            <div className="mx_UserMenu_contextMenu_header">
-                {primaryHeader}
-                <AccessibleTooltipButton
-                    className="mx_UserMenu_contextMenu_themeButton"
-                    onClick={this.onSwitchThemeClick}
-                    title={this.state.isDarkTheme ? _t("Switch to light mode") : _t("Switch to dark mode")}
-                >
-                    <img
-                        src={require("../../../res/img/element-icons/roomlist/dark-light-mode.svg")}
-                        alt={_t("Switch theme")}
-                        width={16}
-                    />
-                </AccessibleTooltipButton>
-            </div>
-            {hostingLink}
-            {primaryOptionList}
-            {secondarySection}
-        </IconizedContextMenu>;
+        return (
+            <IconizedContextMenu
+                // numerical adjustments to overlap the context menu by just over the width of the
+                // menu icon and make it look connected
+                left={
+                    this.state.contextMenuPosition.width +
+                    this.state.contextMenuPosition.left -
+                    10
+                }
+                top={
+                    this.state.contextMenuPosition.top +
+                    this.state.contextMenuPosition.height +
+                    8
+                }
+                onFinished={this.onCloseMenu}
+                className={classes}
+            >
+                <div className="mx_UserMenu_contextMenu_header">
+                    {primaryHeader}
+                    <AccessibleTooltipButton
+                        className="mx_UserMenu_contextMenu_themeButton"
+                        onClick={this.onSwitchThemeClick}
+                        title={
+                            this.state.isDarkTheme
+                                ? _t("Switch to light mode")
+                                : _t("Switch to dark mode")
+                        }
+                    >
+                        <img
+                            src={require("../../../res/img/element-icons/roomlist/dark-light-mode.svg")}
+                            alt={_t("Switch theme")}
+                            width={16}
+                        />
+                    </AccessibleTooltipButton>
+                </div>
+                {hostingLink}
+                {primaryOptionList}
+                {secondarySection}
+            </IconizedContextMenu>
+        );
     };
 
     public render() {
         const avatarSize = 32; // should match border-radius of the avatar
 
-        const displayName = OwnProfileStore.instance.displayName || MatrixClientPeg.get().getUserId();
+        const displayName =
+            OwnProfileStore.instance.displayName ||
+            MatrixClientPeg.get().getUserId();
         const avatarUrl = OwnProfileStore.instance.getHttpAvatarUrl(avatarSize);
 
         const prototypeCommunityName = CommunityPrototypeStore.instance.getSelectedCommunityName();
@@ -453,17 +521,25 @@ export default class UserMenu extends React.Component<IProps, IState> {
         if (prototypeCommunityName) {
             name = (
                 <div className="mx_UserMenu_doubleName">
-                    <span className="mx_UserMenu_userName">{prototypeCommunityName}</span>
-                    <span className="mx_UserMenu_subUserName">{displayName}</span>
+                    <span className="mx_UserMenu_userName">
+                        {prototypeCommunityName}
+                    </span>
+                    <span className="mx_UserMenu_subUserName">
+                        {displayName}
+                    </span>
                 </div>
             );
             menuName = _t("Community and user menu");
             isPrototype = true;
-        } else if (SettingsStore.getValue("feature_communities_v2_prototypes")) {
+        } else if (
+            SettingsStore.getValue("feature_communities_v2_prototypes")
+        ) {
             name = (
                 <div className="mx_UserMenu_doubleName">
                     <span className="mx_UserMenu_userName">{_t("Home")}</span>
-                    <span className="mx_UserMenu_subUserName">{displayName}</span>
+                    <span className="mx_UserMenu_subUserName">
+                        {displayName}
+                    </span>
                 </div>
             );
             isPrototype = true;
@@ -474,9 +550,9 @@ export default class UserMenu extends React.Component<IProps, IState> {
         }
 
         const classes = classNames({
-            'mx_UserMenu': true,
-            'mx_UserMenu_minimized': this.props.isMinimized,
-            'mx_UserMenu_prototype': isPrototype,
+            mx_UserMenu: true,
+            mx_UserMenu_minimized: this.props.isMinimized,
+            mx_UserMenu_prototype: isPrototype,
         });
 
         return (

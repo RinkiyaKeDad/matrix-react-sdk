@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 import { RoomListStoreClass } from "./RoomListStore";
-import TagOrderStore from "../TagOrderStore";
+import GroupFilterOrderStore from "../GroupFilterOrderStore";
 import { CommunityFilterCondition } from "./filters/CommunityFilterCondition";
 import { arrayDiff, arrayHasDiff } from "../../utils/arrays";
 
@@ -26,28 +26,32 @@ export class TagWatcher {
     private filters = new Map<string, CommunityFilterCondition>();
 
     constructor(private store: RoomListStoreClass) {
-        TagOrderStore.addListener(this.onTagsUpdated);
+        GroupFilterOrderStore.addListener(this.onTagsUpdated);
     }
 
     private onTagsUpdated = () => {
         const lastTags = Array.from(this.filters.keys());
-        const newTags = TagOrderStore.getSelectedTags();
+        const newTags = GroupFilterOrderStore.getSelectedTags();
 
         if (arrayHasDiff(lastTags, newTags)) {
             // Selected tags changed, do some filtering
 
             if (!this.store.matrixClient) {
-                console.warn("Tag update without an associated matrix client - ignoring");
+                console.warn(
+                    "Tag update without an associated matrix client - ignoring"
+                );
                 return;
             }
 
             const newFilters = new Map<string, CommunityFilterCondition>();
-            const filterableTags = newTags.filter(t => t.startsWith("+"));
+            const filterableTags = newTags.filter((t) => t.startsWith("+"));
 
             for (const tag of filterableTags) {
                 const group = this.store.matrixClient.getGroup(tag);
                 if (!group) {
-                    console.warn(`Group selected with no group object available: ${tag}`);
+                    console.warn(
+                        `Group selected with no group object available: ${tag}`
+                    );
                     continue;
                 }
 

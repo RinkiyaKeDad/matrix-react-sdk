@@ -16,8 +16,8 @@ limitations under the License.
 
 import * as React from "react";
 import { createRef } from "react";
-import TagPanel from "./TagPanel";
-import CustomRoomTagPanel from "./CustomRoomTagPanel";
+import GroupFilterPanel from "./GroupFilterPanel";
+import CustomRoomGroupFilterPanel from "./CustomRoomGroupFilterPanel";
 import classNames from "classnames";
 import dis from "../../dispatcher/dispatcher";
 import { _t } from "../../languageHandler";
@@ -31,8 +31,10 @@ import { BreadcrumbsStore } from "../../stores/BreadcrumbsStore";
 import { UPDATE_EVENT } from "../../stores/AsyncStore";
 import ResizeNotifier from "../../utils/ResizeNotifier";
 import SettingsStore from "../../settings/SettingsStore";
-import RoomListStore, { LISTS_UPDATE_EVENT } from "../../stores/room-list/RoomListStore";
-import {Key} from "../../Keyboard";
+import RoomListStore, {
+    LISTS_UPDATE_EVENT,
+} from "../../stores/room-list/RoomListStore";
+import { Key } from "../../Keyboard";
 import IndicatorScrollbar from "../structures/IndicatorScrollbar";
 import AccessibleTooltipButton from "../views/elements/AccessibleTooltipButton";
 import { OwnProfileStore } from "../../stores/OwnProfileStore";
@@ -46,7 +48,7 @@ interface IProps {
 
 interface IState {
     showBreadcrumbs: boolean;
-    showTagPanel: boolean;
+    showGroupFilterPanel: boolean;
 }
 
 // List of CSS classes which should be included in keyboard navigation within the room list
@@ -70,17 +72,30 @@ export default class LeftPanel extends React.Component<IProps, IState> {
 
         this.state = {
             showBreadcrumbs: BreadcrumbsStore.instance.visible,
-            showTagPanel: SettingsStore.getValue('TagPanel.enableTagPanel'),
+            showGroupFilterPanel: SettingsStore.getValue(
+                "GroupFilterPanel.enableGroupFilterPanel"
+            ),
         };
 
         BreadcrumbsStore.instance.on(UPDATE_EVENT, this.onBreadcrumbsUpdate);
         RoomListStore.instance.on(LISTS_UPDATE_EVENT, this.onBreadcrumbsUpdate);
         OwnProfileStore.instance.on(UPDATE_EVENT, this.onBackgroundImageUpdate);
         this.bgImageWatcherRef = SettingsStore.watchSetting(
-            "RoomList.backgroundImage", null, this.onBackgroundImageUpdate);
-        this.tagPanelWatcherRef = SettingsStore.watchSetting("TagPanel.enableTagPanel", null, () => {
-            this.setState({showTagPanel: SettingsStore.getValue("TagPanel.enableTagPanel")});
-        });
+            "RoomList.backgroundImage",
+            null,
+            this.onBackgroundImageUpdate
+        );
+        this.tagPanelWatcherRef = SettingsStore.watchSetting(
+            "GroupFilterPanel.enableGroupFilterPanel",
+            null,
+            () => {
+                this.setState({
+                    showGroupFilterPanel: SettingsStore.getValue(
+                        "GroupFilterPanel.enableGroupFilterPanel"
+                    ),
+                });
+            }
+        );
 
         // We watch the middle panel because we don't actually get resized, the middle panel does.
         // We listen to the noisy channel to avoid choppy reaction times.
@@ -91,8 +106,14 @@ export default class LeftPanel extends React.Component<IProps, IState> {
         SettingsStore.unwatchSetting(this.tagPanelWatcherRef);
         SettingsStore.unwatchSetting(this.bgImageWatcherRef);
         BreadcrumbsStore.instance.off(UPDATE_EVENT, this.onBreadcrumbsUpdate);
-        RoomListStore.instance.off(LISTS_UPDATE_EVENT, this.onBreadcrumbsUpdate);
-        OwnProfileStore.instance.off(UPDATE_EVENT, this.onBackgroundImageUpdate);
+        RoomListStore.instance.off(
+            LISTS_UPDATE_EVENT,
+            this.onBreadcrumbsUpdate
+        );
+        OwnProfileStore.instance.off(
+            UPDATE_EVENT,
+            this.onBackgroundImageUpdate
+        );
         this.props.resizeNotifier.off("middlePanelResizedNoisy", this.onResize);
     }
 
@@ -103,7 +124,7 @@ export default class LeftPanel extends React.Component<IProps, IState> {
     private onBreadcrumbsUpdate = () => {
         const newVal = BreadcrumbsStore.instance.visible;
         if (newVal !== this.state.showBreadcrumbs) {
-            this.setState({showBreadcrumbs: newVal});
+            this.setState({ showBreadcrumbs: newVal });
 
             // Update the sticky headers too as the breadcrumbs will be popping in or out.
             if (!this.listContainerRef.current) return; // ignore: no headers to sticky
@@ -117,10 +138,17 @@ export default class LeftPanel extends React.Component<IProps, IState> {
         let avatarUrl = OwnProfileStore.instance.getHttpAvatarUrl(avatarSize);
         const settingBgMxc = SettingsStore.getValue("RoomList.backgroundImage");
         if (settingBgMxc) {
-            avatarUrl = MatrixClientPeg.get().mxcUrlToHttp(settingBgMxc, avatarSize, avatarSize);
+            avatarUrl = MatrixClientPeg.get().mxcUrlToHttp(
+                settingBgMxc,
+                avatarSize,
+                avatarSize
+            );
         }
         const avatarUrlProp = `url(${avatarUrl})`;
-        if (document.body.style.getPropertyValue("--avatar-url") !== avatarUrlProp) {
+        if (
+            document.body.style.getPropertyValue("--avatar-url") !==
+            avatarUrlProp
+        ) {
             document.body.style.setProperty("--avatar-url", avatarUrlProp);
         }
     };
@@ -137,29 +165,39 @@ export default class LeftPanel extends React.Component<IProps, IState> {
     private doStickyHeaders(list: HTMLDivElement) {
         const topEdge = list.scrollTop;
         const bottomEdge = list.offsetHeight + list.scrollTop;
-        const sublists = list.querySelectorAll<HTMLDivElement>(".mx_RoomSublist");
+        const sublists = list.querySelectorAll<HTMLDivElement>(
+            ".mx_RoomSublist"
+        );
 
         const headerRightMargin = 16; // calculated from margins and widths to align with non-sticky tiles
         const headerStickyWidth = list.clientWidth - headerRightMargin;
 
         // We track which styles we want on a target before making the changes to avoid
         // excessive layout updates.
-        const targetStyles = new Map<HTMLDivElement, {
-            stickyTop?: boolean;
-            stickyBottom?: boolean;
-            makeInvisible?: boolean;
-        }>();
+        const targetStyles = new Map<
+            HTMLDivElement,
+            {
+                stickyTop?: boolean;
+                stickyBottom?: boolean;
+                makeInvisible?: boolean;
+            }
+        >();
 
         let lastTopHeader;
         let firstBottomHeader;
         for (const sublist of sublists) {
-            const header = sublist.querySelector<HTMLDivElement>(".mx_RoomSublist_stickable");
+            const header = sublist.querySelector<HTMLDivElement>(
+                ".mx_RoomSublist_stickable"
+            );
             header.style.removeProperty("display"); // always clear display:none first
 
             // When an element is <=40% off screen, make it take over
             const offScreenFactor = 0.4;
-            const isOffTop = (sublist.offsetTop + (offScreenFactor * HEADER_HEIGHT)) <= topEdge;
-            const isOffBottom = (sublist.offsetTop + (offScreenFactor * HEADER_HEIGHT)) >= bottomEdge;
+            const isOffTop =
+                sublist.offsetTop + offScreenFactor * HEADER_HEIGHT <= topEdge;
+            const isOffBottom =
+                sublist.offsetTop + offScreenFactor * HEADER_HEIGHT >=
+                bottomEdge;
 
             if (isOffTop || sublist === sublists[0]) {
                 targetStyles.set(header, { stickyTop: true });
@@ -189,8 +227,14 @@ export default class LeftPanel extends React.Component<IProps, IState> {
             }
 
             if (style.stickyTop) {
-                if (!header.classList.contains("mx_RoomSublist_headerContainer_stickyTop")) {
-                    header.classList.add("mx_RoomSublist_headerContainer_stickyTop");
+                if (
+                    !header.classList.contains(
+                        "mx_RoomSublist_headerContainer_stickyTop"
+                    )
+                ) {
+                    header.classList.add(
+                        "mx_RoomSublist_headerContainer_stickyTop"
+                    );
                 }
 
                 const newTop = `${list.parentElement.offsetTop}px`;
@@ -198,27 +242,51 @@ export default class LeftPanel extends React.Component<IProps, IState> {
                     header.style.top = newTop;
                 }
             } else {
-                if (header.classList.contains("mx_RoomSublist_headerContainer_stickyTop")) {
-                    header.classList.remove("mx_RoomSublist_headerContainer_stickyTop");
+                if (
+                    header.classList.contains(
+                        "mx_RoomSublist_headerContainer_stickyTop"
+                    )
+                ) {
+                    header.classList.remove(
+                        "mx_RoomSublist_headerContainer_stickyTop"
+                    );
                 }
                 if (header.style.top) {
-                    header.style.removeProperty('top');
+                    header.style.removeProperty("top");
                 }
             }
 
             if (style.stickyBottom) {
-                if (!header.classList.contains("mx_RoomSublist_headerContainer_stickyBottom")) {
-                    header.classList.add("mx_RoomSublist_headerContainer_stickyBottom");
+                if (
+                    !header.classList.contains(
+                        "mx_RoomSublist_headerContainer_stickyBottom"
+                    )
+                ) {
+                    header.classList.add(
+                        "mx_RoomSublist_headerContainer_stickyBottom"
+                    );
                 }
             } else {
-                if (header.classList.contains("mx_RoomSublist_headerContainer_stickyBottom")) {
-                    header.classList.remove("mx_RoomSublist_headerContainer_stickyBottom");
+                if (
+                    header.classList.contains(
+                        "mx_RoomSublist_headerContainer_stickyBottom"
+                    )
+                ) {
+                    header.classList.remove(
+                        "mx_RoomSublist_headerContainer_stickyBottom"
+                    );
                 }
             }
 
             if (style.stickyTop || style.stickyBottom) {
-                if (!header.classList.contains("mx_RoomSublist_headerContainer_sticky")) {
-                    header.classList.add("mx_RoomSublist_headerContainer_sticky");
+                if (
+                    !header.classList.contains(
+                        "mx_RoomSublist_headerContainer_sticky"
+                    )
+                ) {
+                    header.classList.add(
+                        "mx_RoomSublist_headerContainer_sticky"
+                    );
                 }
 
                 const newWidth = `${headerStickyWidth}px`;
@@ -226,11 +294,17 @@ export default class LeftPanel extends React.Component<IProps, IState> {
                     header.style.width = newWidth;
                 }
             } else if (!style.stickyTop && !style.stickyBottom) {
-                if (header.classList.contains("mx_RoomSublist_headerContainer_sticky")) {
-                    header.classList.remove("mx_RoomSublist_headerContainer_sticky");
+                if (
+                    header.classList.contains(
+                        "mx_RoomSublist_headerContainer_sticky"
+                    )
+                ) {
+                    header.classList.remove(
+                        "mx_RoomSublist_headerContainer_sticky"
+                    );
                 }
                 if (header.style.width) {
-                    header.style.removeProperty('width');
+                    header.style.removeProperty("width");
                 }
             }
         }
@@ -241,12 +315,18 @@ export default class LeftPanel extends React.Component<IProps, IState> {
         if (lastTopHeader) {
             listWrapper.classList.add("mx_LeftPanel_roomListWrapper_stickyTop");
         } else {
-            listWrapper.classList.remove("mx_LeftPanel_roomListWrapper_stickyTop");
+            listWrapper.classList.remove(
+                "mx_LeftPanel_roomListWrapper_stickyTop"
+            );
         }
         if (firstBottomHeader) {
-            listWrapper.classList.add("mx_LeftPanel_roomListWrapper_stickyBottom");
+            listWrapper.classList.add(
+                "mx_LeftPanel_roomListWrapper_stickyBottom"
+            );
         } else {
-            listWrapper.classList.remove("mx_LeftPanel_roomListWrapper_stickyBottom");
+            listWrapper.classList.remove(
+                "mx_LeftPanel_roomListWrapper_stickyBottom"
+            );
         }
     }
 
@@ -282,7 +362,9 @@ export default class LeftPanel extends React.Component<IProps, IState> {
     };
 
     private onEnter = () => {
-        const firstRoom = this.listContainerRef.current.querySelector<HTMLDivElement>(".mx_RoomTile");
+        const firstRoom = this.listContainerRef.current.querySelector<
+            HTMLDivElement
+        >(".mx_RoomTile");
         if (firstRoom) {
             firstRoom.click();
             return true; // to get the field to clear
@@ -296,8 +378,12 @@ export default class LeftPanel extends React.Component<IProps, IState> {
         let classes: DOMTokenList;
 
         do {
-            const child = up ? element.lastElementChild : element.firstElementChild;
-            const sibling = up ? element.previousElementSibling : element.nextElementSibling;
+            const child = up
+                ? element.lastElementChild
+                : element.firstElementChild;
+            const sibling = up
+                ? element.previousElementSibling
+                : element.nextElementSibling;
 
             if (descending) {
                 if (child) {
@@ -320,7 +406,7 @@ export default class LeftPanel extends React.Component<IProps, IState> {
             if (element) {
                 classes = element.classList;
             }
-        } while (element && !cssClasses.some(c => classes.contains(c)));
+        } while (element && !cssClasses.some((c) => classes.contains(c)));
 
         if (element) {
             element.focus();
@@ -375,32 +461,36 @@ export default class LeftPanel extends React.Component<IProps, IState> {
     }
 
     public render(): React.ReactNode {
-        const tagPanel = !this.state.showTagPanel ? null : (
+        const tagPanel = !this.state.showGroupFilterPanel ? null : (
             <div className="mx_LeftPanel_tagPanelContainer">
-                <TagPanel />
-                {SettingsStore.getValue("feature_custom_tags") ? <CustomRoomTagPanel /> : null}
+                <GroupFilterPanel />
+                {SettingsStore.getValue("feature_custom_tags") ? (
+                    <CustomRoomGroupFilterPanel />
+                ) : null}
             </div>
         );
 
-        const roomList = <RoomList
-            onKeyDown={this.onKeyDown}
-            resizeNotifier={null}
-            collapsed={false}
-            onFocus={this.onFocus}
-            onBlur={this.onBlur}
-            isMinimized={this.props.isMinimized}
-            onResize={this.onResize}
-        />;
+        const roomList = (
+            <RoomList
+                onKeyDown={this.onKeyDown}
+                resizeNotifier={null}
+                collapsed={false}
+                onFocus={this.onFocus}
+                onBlur={this.onBlur}
+                isMinimized={this.props.isMinimized}
+                onResize={this.onResize}
+            />
+        );
 
         const containerClasses = classNames({
-            "mx_LeftPanel": true,
-            "mx_LeftPanel_hasTagPanel": !!tagPanel,
-            "mx_LeftPanel_minimized": this.props.isMinimized,
+            mx_LeftPanel: true,
+            mx_LeftPanel_hasGroupFilterPanel: !!tagPanel,
+            mx_LeftPanel_minimized: this.props.isMinimized,
         });
 
         const roomListClasses = classNames(
             "mx_LeftPanel_actualRoomListContainer",
-            "mx_AutoHideScrollbar",
+            "mx_AutoHideScrollbar"
         );
 
         return (
